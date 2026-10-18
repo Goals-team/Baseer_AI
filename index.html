@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>نظام بَصِير | Advanced AI</title>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+  <style>
+    :root {
+      --bg-color: #000; --panel-bg: #111; --accent: #0a84ff;
+      --danger: #ff453a; --success: #32d74b; --text: #fff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Cairo', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+
+    header { padding-top: max(20px, env(safe-area-inset-top)); padding-right: 20px; padding-left: 20px; padding-bottom: 15px; background: var(--panel-bg); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; z-index: 10; }
+    .logo-container { display: flex; align-items: center; gap: 10px; }
+    h1 { margin: 0; font-size: clamp(1.2rem, 4vw, 1.4rem); font-weight: 800; }
+    h1 span { color: #8e8e93; font-weight: 600; font-size: clamp(0.75rem, 2.5vw, 0.9rem); }
+
+    .camera-wrapper { flex: 1; position: relative; background: #000; overflow: hidden; cursor: pointer; }
+    video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+
+    .hud-overlay {
+      position: absolute; top: 15px; left: 15px; z-index: 5;
+      background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      padding: 12px 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);
+      font-family: monospace; font-size: clamp(0.75rem, 3vw, 0.9rem); color: #32d74b;
+      display: flex; flex-direction: column; gap: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    .hud-overlay span { color: #fff; font-weight: bold; }
+    
+    .mic-status { color: #ff9f0a; font-weight: bold; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; margin-bottom: 2px;}
+    .mic-dot { width: 8px; height: 8px; background: #ff9f0a; border-radius: 50%; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
+
+    .control-panel { background: var(--panel-bg); padding-top: 20px; padding-right: 20px; padding-left: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); border-top-left-radius: 25px; border-top-right-radius: 25px; box-shadow: 0 -5px 25px rgba(0,0,0,0.9); z-index: 10; display: flex; flex-direction: column; gap: 12px; }
+    .status-box { background: #1c1c1e; border-radius: 15px; padding: 15px; text-align: center; font-size: clamp(1rem, 4vw, 1.2rem); font-weight: 800; border: 1px solid #333; min-height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column; transition: 0.3s; }
+    .gesture-hint { font-size: 0.8rem; color: #8e8e93; font-weight: 600; margin-top: 5px; display: none; }
+
+    .start-btn { background: var(--accent); color: #fff; border: none; border-radius: 16px; padding: 20px; font-size: clamp(1.2rem, 4vw, 1.4rem); font-weight: 800; font-family: inherit; cursor: pointer; width: 100%; transition: 0.2s;}
+    .start-btn:active { transform: scale(0.96); background: #0070e6; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo-container">
+      <img src="Gemini_Generated_Image_3o7lnk3o7lnk3o7l.jpg" alt="شعار بصير" width="40" height="40" style="border-radius: 10px;">
+      <h1>بَصِير <span>Pro AI</span></h1>
+    </div>
+    <div style="font-size: clamp(0.75rem, 3vw, 0.85rem); color: var(--success); font-weight: bold;" id="top-status">Offline</div>
+  </header>
+
+  <div class="camera-wrapper" id="touch-zone">
+    <div class="hud-overlay" id="hud" style="display: none;">
+      <div class="mic-status"><div class="mic-dot"></div> الميكروفون نشط</div>
+      <div>SYS_LATENCY: <span id="ping-val">0</span> ms</div>
+      <div>BATTERY_MODE: <span id="pwr-val" style="color:#0a84ff">SMART</span></div>
+      <div>3D_AUDIO: <span style="color:#32d74b">ON</span></div>
+    </div>
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div class="control-panel">
+    <div class="status-box" id="info-screen">
+      <div>المعالج في وضع السبات.</div>
+      <div class="gesture-hint" id="gesture-hint">قل "يا بصير" للتحدث، أو المس الشاشة</div>
+    </div>
+    <button class="start-btn" id="start-btn">بدء التهيئة الهندسية ⚙️</button>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
